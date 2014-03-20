@@ -172,10 +172,15 @@ public class KijiInstanceCache {
    * @param table name to be invalidated.
    */
   public void invalidateTable(String table) {
-    mTables.invalidate(table);
-    mFreshReaders.invalidate(table);
+    try {
+      mTables.get(table).release();
+    } catch (Exception e) {
+      throw new RuntimeException("Exception occurred while releasing table " + table + ".", e);
+    } finally {
+      mTables.invalidate(table);
+      mFreshReaders.invalidate(table);
+    }
   }
-
 
   /**
    * Stop creating resources to cache, and cleanup any existing resources.
@@ -184,7 +189,14 @@ public class KijiInstanceCache {
    */
   public void stop() throws IOException {
     mIsOpen = false; // Stop caches from loading more entries
+    for (FreshKijiTableReader reader : mFreshReaders.asMap().values()) {
+      reader.close();
+    }
+    for (KijiTable table : mTables.asMap().values()) {
+      table.release();
+    }
     mTables.invalidateAll();
+    mTables.cleanUp();
     mKiji.release();
   }
 
